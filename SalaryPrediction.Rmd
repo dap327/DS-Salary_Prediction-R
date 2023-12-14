@@ -1,0 +1,364 @@
+---
+title: "Salary Prediction"
+---
+
+# Read in Data
+```{r}
+library(psych)
+library(gplots)
+library(rsm)
+
+dat <- read.csv("adult.csv", header = F, sep = ",")
+colnames(dat) <- c("age", "workclass", "fnlwgt", "education", "education.num", "marital.status", "occupation", "relationship", "race", "sex", "capital.gain", "capital.loss", "hours.per.week", "native.country", "Salary")
+head(dat)
+tail(dat)
+```
+
+
+# Data Analysis
+## "NA" 
+```{r}
+
+# Change "?" in the dataset to "NA"
+#dat <- data.frame(dat)
+dat$workclass <- gsub("?",NA,dat$workclass, fixed = TRUE)
+dat$age <- gsub("?",NA,dat$age, fixed = TRUE)
+dat$fnlwgt <- gsub("?",NA,dat$fnlwgt, fixed = TRUE)
+dat$education <- gsub("?",NA,dat$education, fixed = TRUE)
+dat$education.num <- gsub("?",NA,dat$education.num, fixed = TRUE)
+dat$marital.status <- gsub("?",NA,dat$marital.status, fixed = TRUE)
+dat$occupation <- gsub("?",NA,dat$occupation, fixed = TRUE)
+dat$relationship <- gsub("?",NA,dat$relationship, fixed = TRUE)
+dat$race <- gsub("?",NA,dat$race, fixed = TRUE)
+dat$sex <- gsub("?",NA,dat$sex, fixed = TRUE)
+dat$capital.gain <- gsub("?",NA,dat$capital.gain, fixed = TRUE)
+dat$capital.loss <- gsub("?",NA,dat$capital.loss, fixed = TRUE)
+dat$hours.per.week <- gsub("?",NA,dat$hours.per.week, fixed = TRUE)
+dat$native.country <- gsub("?",NA,dat$native.country, fixed = TRUE)
+dat$Salary <- gsub("?",NA,dat$Salary, fixed = TRUE)
+sum(is.na(dat))
+dat <- na.omit(dat)
+
+```
+
+
+## Label Encoding
+```{r}
+# workclass
+workclass <- c(dat[,2])
+workclass <- factor(workclass)
+workclass <- as.numeric(workclass)
+
+# education
+education <- c(dat[,4])
+education <- factor(education)
+education <- as.numeric(education)
+
+# marital.status
+marital.status <- c(dat[,6])
+marital.status <- factor(marital.status)
+marital.status <- as.numeric(marital.status)
+
+# occupation
+occupation <- c(dat[,7])
+occupation <- factor(occupation)
+occupation <- as.numeric(occupation)
+
+# relationship
+relationship <- c(dat[,8])
+relationship <- factor(relationship)
+relationship <- as.numeric(relationship)
+
+# race
+race <- c(dat[,9])
+race <- factor(race)
+race <- as.numeric(race)
+
+# sex
+sex <- c(dat[,10])
+sex <- factor(sex)
+sex <- as.numeric(sex)
+
+# native.country
+native.country <- c(dat[,14])
+native.country <- factor(native.country)
+native.country <- as.numeric(native.country)
+
+# salary 
+Salary <- c(dat[,15])
+Salary <- factor(Salary)
+Salary <- as.numeric(Salary)
+
+
+## Convert "string" to "numeric"
+# age 
+age <- c(as.numeric(dat[,1]))
+
+# education.num 
+education.num <- c(as.numeric(dat[,5]))
+
+# capital.gain
+capital.gain <- c(as.numeric(dat[,11]))
+
+# capital.loss
+capital.loss <- c(as.numeric(dat[,12]))
+
+# hours.per.week
+hours.per.week <- c(as.numeric(dat[,13]))
+
+# Salary
+Salary <- as.data.frame(dat[,15]) 
+head(Salary)
+
+
+## New dataset (delete useless variable --- "fnlwgt", "capital.gain", "capital.loss")
+dat2 <- cbind(age, workclass, education, education.num, marital.status, occupation, relationship, race, sex, hours.per.week, native.country, Salary)
+colnames(dat2) = c("age", "workclass", "education", "education.num", "marital.status", "occupation", "relationship", "race", "sex", "hours.per.week", "native.country", "Salary")
+dat2 <- as.data.frame(dat2)
+
+head(dat2)
+
+```
+
+### introducing the corrplot of our datasets
+
+```{r}
+library(corrplot)
+corrplot(cor(as.matrix(dat2[,1:11])), order = "hclust", tl.col='black', tl.cex=.75) 
+
+```
+
+
+## ------------------------------------------------------------- ##
+
+
+### random forest
+```{r}
+library(caret)
+library(randomForest)
+library(randomForestExplainer)
+
+
+dat3 <- transform(
+  dat2,
+  Salary = as.factor(Salary)
+)
+
+head(dat3)
+```
+
+
+
+
+# Separation of Training and Testing Data
+```{r}
+set.seed(975) # fix the random seed
+h <- runif(nrow(dat3))
+dat_r <- dat3[order(h),]
+nrow(dat_r)
+ncol(dat_r)
+
+# take first 80% of data as training set, and the rest 20% as testing set
+train <- dat_r[1:24130, 1:12]
+train <- data.frame(train)
+#train_y <- dat_r[1:24130, 12]
+test <- dat_r[24131:30162, 1:12]
+test <- data.frame(test)
+#test_y <- dat_r[24131:30162, 12]
+head(train)
+```
+
+
+### original random forest part
+
+```{r}
+# build up the random forest model
+rf <- randomForest(Salary ~., data = train, localImp = TRUE)
+
+print(rf)
+```
+
+```{r}
+### check the accuracy of train set
+p1 <- predict(rf, train)
+
+confusionMatrix(p1, train$Salary)
+```
+
+
+```{r}
+### check the accuracy of test set
+p2 <- predict(rf, test)
+
+confusionMatrix(p2,test$Salary)
+```
+
+
+```{r}
+# plot the error rate of random forest, and the tendency also can be explained by the Doulbe-decent curve
+plot(rf)
+```
+
+
+```{r}
+plot_predict_interaction(rf, train, "hours.per.week", "age")
+```
+
+
+
+
+## ----------------------- ## ramdom forest with PCA
+
+
+```{r}
+
+pca <- prcomp(dat2[,1:11])
+
+summary(pca)
+# Accrding to our result, if we combine PC1, ..., PC4 to construct our model, we can capture 93% of variance
+
+```
+
+
+
+```{r}
+
+library(factoextra)
+
+fviz_eig(pca, addlabels = TRUE)
+
+```
+
+
+```{r}
+
+pca$rotation
+
+```
+
+## New data
+```{r}
+
+new_data <- data.frame(pca$x)
+new_data <- cbind(new_data, dat3[,12])
+colnames(new_data) = c("PC1", "PC2", "PC3", "PC4", "PC5", "PC6", "PC7", "PC8", "PC9", "PC10", "PC11", "Salary")
+head(new_data)
+
+```
+
+```{r}
+# randomly reorder the data
+set.seed(975)
+h <- runif(nrow(new_data))
+dat_r <- new_data[order(h),]
+nrow(dat_r)
+ncol(dat_r)
+
+# take first 80% of data as training set, and the rest 20% as testing set
+train_pca <- dat_r[1:24130, 1:12]
+#train_y <- dat_r[1:24130, 12]
+test_pca <- dat_r[24131:30162, 1:12]
+#test_y <- dat_r[24131:30162, 12]
+head(train)
+```
+
+
+
+
+
+
+```{r}
+# build up the random forest model
+rf_pca <- randomForest(Salary ~ PC1 + PC2 + PC3 + PC4, data = train_pca, localImp = TRUE)
+
+print(rf_pca)
+```
+
+
+```{r}
+### check the accuracy of train set
+p3 <- predict(rf_pca, train_pca)
+
+confusionMatrix(p3, train_pca$Salary)
+```
+
+```{r}
+### check the accuracy of train set
+p4 <- predict(rf_pca, test_pca)
+
+confusionMatrix(p4, test_pca$Salary)
+```
+
+## the accuracy seems drop a little bit
+
+
+
+## ------------------------------------ ##
+
+
+
+### decision tree part without PCA
+
+```{r}
+library(rpart)
+library(rpart.plot)
+fit <- rpart(Salary ~ ., data = train)
+rpart.plot(fit)
+```
+
+# Test Accuracy
+
+## Check Prediction Result
+
+```{r}
+p5 <- predict(fit, test, type = "class")
+tail(p5)
+p3 <- predict(fit, test,type = "class")
+tail(p5)
+```
+
+## Accuracy Calculation
+```{r}
+result <- table(p5, test$Salary)
+result
+## diagonals are correct predictions
+```
+```{r}
+accuracy <- sum(diag(result))/nrow(test)
+accuracy
+```
+
+
+## ------------------------------ ##
+
+# decision with PCA
+
+```{r}
+fit_pca <- rpart(Salary ~ PC1 + PC2 + PC3 + PC4, data = train_pca)
+rpart.plot(fit_pca)
+```
+
+# Test Accuracy
+## Check Prediction Result
+```{r}
+pre <- predict(fit_pca, test_pca)
+tail(pre)
+pre <- predict(fit_pca, test_pca, type = "class")
+tail(pre)
+```
+
+## Accuracy Calculation
+```{r}
+result <- table(pre, test_pca$Salary)
+result
+## diagonals are correct predictions
+```
+```{r}
+accuracy <- sum(diag(result))/nrow(test)
+accuracy
+```
+
+
+
+
+
